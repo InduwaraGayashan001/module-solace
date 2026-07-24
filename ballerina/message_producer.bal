@@ -58,7 +58,11 @@ public isolated client class MessageProducer {
     # + destination - The destination to send to (topic or queue)
     # + message - The message to send (payload and optional properties)
     # + return - Error if send fails
-    isolated remote function send(Destination destination, Message message) returns Error? = @java:Method {
+    isolated remote function send(Destination destination, Message message) returns Error? {
+        return self.externSend(destination, message);
+    }
+
+    isolated function externSend(Destination destination, Message message) returns Error? = @java:Method {
         'class: "io.xlibb.solace.producer.ProducerActions",
         name: "send"
     } external;
