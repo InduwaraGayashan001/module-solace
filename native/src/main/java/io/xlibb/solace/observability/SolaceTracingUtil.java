@@ -43,9 +43,6 @@ import static io.xlibb.solace.observability.SolaceObservabilityConstants.TAG_KEY
  */
 public class SolaceTracingUtil {
 
-    // Prefix applied when surfacing an upstream message's trace-context as tags on a pull-based receive span.
-    private static final String TAG_KEY_UPSTREAM_PREFIX = "upstream.";
-
     public static void traceResourceInvocation(Environment env, BObject object, String destination) {
         if (!ObserveUtils.isTracingEnabled()) {
             return;
@@ -73,11 +70,7 @@ public class SolaceTracingUtil {
     }
 
     /**
-     * Returns the current span's context serialized by the configured OpenTelemetry propagator (W3C
-     * traceparent/tracestate, Jaeger uber-trace-id, B3, etc. - whichever the active tracing provider installs),
-     * suitable for injecting into an outbound message's properties so a downstream consumer can correlate its
-     * trace with this publish. {@code ObserveUtils.getContextProperties} delegates to
-     * {@code TracersStore.getPropagators()}, so this is provider-agnostic by construction.
+     * Returns the current span's context serialized by the configured OpenTelemetry propagator.
      *
      * @param env the Ballerina environment of the publishing native call
      * @return the carrier map, or null if tracing is disabled or there is no active span to propagate
@@ -95,11 +88,6 @@ public class SolaceTracingUtil {
 
     /**
      * Reads the trace-context entries (if any) out of a received Ballerina message's {@code properties} field.
-     * <p>
-     * The exact property keys are not assumed to be W3C {@code traceparent}/{@code tracestate}: they are taken from
-     * the configured OpenTelemetry propagator's {@link io.opentelemetry.context.propagation.TextMapPropagator#fields()}
-     * - the same fields the publishing side injected via {@link #getTraceContextHeaders} - so extraction stays
-     * correct whatever propagation format the active tracing provider uses.
      *
      * @param message the Ballerina message record
      * @return a (possibly empty) carrier map of the trace-context entries found
@@ -121,10 +109,6 @@ public class SolaceTracingUtil {
         return carrier;
     }
 
-    /**
-     * The message-property keys the active OpenTelemetry propagator uses to carry trace context, read from
-     * {@link TracersStore}. Returns an empty set when tracing is not initialized so callers degrade to a no-op.
-     */
     private static Collection<String> propagationFields() {
         TracersStore store = TracersStore.getInstance();
         if (!store.isInitialized()) {
