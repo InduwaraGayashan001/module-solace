@@ -133,31 +133,6 @@ public class SolaceTracingUtil {
         return store.getPropagators().getTextMapPropagator().fields();
     }
 
-    /**
-     * Tags the ambient span (of a pull-based {@code receive}/{@code receiveNoWait} client action) with the
-     * upstream trace-context carried on the received message. The span for these client actions is already started
-     * by the time the native call runs - before the message (and so its trace-context) is known - so a genuine
-     * parent-span link isn't possible here; the extracted context is surfaced as tags instead, for manual
-     * correlation across the publish/consume boundary.
-     *
-     * @param env     the Ballerina environment of the receiving native call
-     * @param message the received Ballerina message record
-     */
-    public static void tagUpstreamTraceContext(Environment env, BMap<BString, Object> message) {
-        if (!ObserveUtils.isTracingEnabled()) {
-            return;
-        }
-        Map<String, String> carrier = extractTraceContextHeaders(message);
-        if (carrier.isEmpty()) {
-            return;
-        }
-        ObserverContext ctx = ObserveUtils.getObserverContextOfCurrentFrame(env);
-        if (ctx == null) {
-            return;
-        }
-        carrier.forEach((key, value) -> ctx.addTag(TAG_KEY_UPSTREAM_PREFIX + key, value));
-    }
-
     private static void putIfPresent(Map<String, String> carrier, BMap<BString, Object> props, String key) {
         Object value = props.get(StringUtils.fromString(key));
         if (value != null) {
