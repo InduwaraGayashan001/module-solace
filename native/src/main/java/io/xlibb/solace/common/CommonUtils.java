@@ -31,6 +31,7 @@ import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 
 import static io.xlibb.solace.common.MessageFieldConstants.PAYLOAD_KEY;
+import static io.xlibb.solace.common.MessageFieldConstants.REDELIVERED_KEY;
 
 /**
  * Utility class for common operations like error creation and virtual thread execution.
@@ -109,6 +110,23 @@ public class CommonUtils {
             return arr.size();
         }
         return 0;
+    }
+
+    /**
+     * Reports whether a received message is flagged by the broker as a redelivery.
+     * <p>
+     * The {@code redelivered} field is optional on the Ballerina {@code Message} record but is always populated on the
+     * consume path, so a missing value is treated as "not redelivered" rather than unknown.
+     *
+     * @param message the Ballerina message record
+     * @return true if the broker marked this message as redelivered
+     */
+    public static boolean isRedelivered(BMap<BString, Object> message) {
+        if (message == null) {
+            return false;
+        }
+        Object redelivered = message.get(REDELIVERED_KEY);
+        return redelivered instanceof Boolean flag && flag;
     }
 
     /**
