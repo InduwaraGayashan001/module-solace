@@ -43,6 +43,7 @@ import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 
 import static io.xlibb.solace.observability.SolaceObservabilityConstants.CONTEXT_CONSUMER;
+import static io.xlibb.solace.observability.SolaceObservabilityConstants.ERROR_TYPE_DISPATCH;
 import static io.xlibb.solace.observability.SolaceObservabilityConstants.ERROR_TYPE_RECEIVE;
 
 /**
@@ -67,11 +68,13 @@ final class SolaceMessageListener implements XMLMessageListener {
     private final boolean hasOnError;
     private final boolean autoAck;
     private final String url;
+    private final String vpn;
     private final String destination;
+    private final String destinationKind;
     private final ExecutorService dispatcher;
 
     SolaceMessageListener(Runtime runtime, BObject service, BObject caller, boolean hasCaller, boolean hasOnError,
-                          boolean autoAck, String url, String destination) {
+                          boolean autoAck, String url, String vpn, String destination, String destinationKind) {
         this.runtime = runtime;
         this.service = service;
         this.caller = caller;
@@ -79,7 +82,9 @@ final class SolaceMessageListener implements XMLMessageListener {
         this.hasOnError = hasOnError;
         this.autoAck = autoAck;
         this.url = url;
+        this.vpn = vpn;
         this.destination = destination;
+        this.destinationKind = destinationKind;
         this.dispatcher = Executors.newSingleThreadExecutor(runnable -> {
             Thread thread = new Thread(runnable, "solace-listener-dispatch");
             thread.setDaemon(true);
@@ -95,22 +100,24 @@ final class SolaceMessageListener implements XMLMessageListener {
         try {
             ballerinaMessage = MessageConverter.toBallerinaMessage(message);
         } catch (Throwable t) {
+            // The broker delivered a message the connector could not decode - a receive-side failure.
             submit(() -> dispatchError(CommonUtils.createError("Failed to convert message",
-                    t instanceof Exception e ? e : new Exception(t))));
+                    t instanceof Exception e ? e : new Exception(t)), null, ERROR_TYPE_RECEIVE));
             return;
         }
-        SolaceMetricsUtil.reportConsume(url, destination, CommonUtils.getPayloadSize(ballerinaMessage));
+        SolaceMetricsUtil.reportConsume(url, vpn, destination, destinationKind,
+                CommonUtils.getPayloadSize(ballerinaMessage), CommonUtils.isRedelivered(ballerinaMessage));
         Map<String, String> traceContext = SolaceTracingUtil.extractTraceContextHeaders(ballerinaMessage);
         submit(() -> deliver(message, ballerinaMessage, traceContext));
     }
 
     private void deliver(BytesXMLMessage message, BMap<BString, Object> ballerinaMessage,
                          Map<String, String> traceContext) {
+        long startNanos = System.nanoTime();
         try {
             Object result = invokeOnMessage(ballerinaMessage, traceContext);
             if (result instanceof BError bError) {
-                // Processing failed: leave the message unsettled so guaranteed flows redeliver it.
-                dispatchError(bError, traceContext);
+                dispatchError(bError, traceContext, ERROR_TYPE_DISPATCH);
                 return;
             }
             // In AUTO_ACK mode the flow is created with client acknowledgement, so settle on success here.
@@ -118,16 +125,21 @@ final class SolaceMessageListener implements XMLMessageListener {
                 message.ackMessage();
             }
         } catch (BError bError) {
-            dispatchError(bError, traceContext);
+            dispatchError(bError, traceContext, ERROR_TYPE_DISPATCH);
         } catch (Throwable t) {
             dispatchError(CommonUtils.createError("Failed to dispatch message to service",
-                    t instanceof Exception e ? e : new Exception(t)), traceContext);
+                    t instanceof Exception e ? e : new Exception(t)), traceContext, ERROR_TYPE_DISPATCH);
+        } finally {
+            SolaceMetricsUtil.reportProcessDuration(url, vpn, destination, destinationKind,
+                    System.nanoTime() - startNanos);
         }
     }
 
     @Override
     public void onException(JCSMPException exception) {
-        submit(() -> dispatchError(CommonUtils.createError("Solace consumer flow error", exception)));
+        // A flow-level failure raised by JCSMP itself - a genuine receive-side error.
+        submit(() -> dispatchError(CommonUtils.createError("Solace consumer flow error", exception),
+                null, ERROR_TYPE_RECEIVE));
     }
 
     private Object invokeOnMessage(BMap<BString, Object> ballerinaMessage, Map<String, String> traceContext) {
@@ -138,12 +150,8 @@ final class SolaceMessageListener implements XMLMessageListener {
         return runtime.callMethod(service, ON_MESSAGE, metadata, ballerinaMessage);
     }
 
-    private void dispatchError(BError error) {
-        dispatchError(error, null);
-    }
-
-    private void dispatchError(BError error, Map<String, String> traceContext) {
-        SolaceMetricsUtil.reportConsumerError(url, destination, ERROR_TYPE_RECEIVE);
+    private void dispatchError(BError error, Map<String, String> traceContext, String errorType) {
+        SolaceMetricsUtil.reportConsumerError(url, vpn, destination, destinationKind, errorType);
         if (!hasOnError) {
             return;
         }
@@ -159,7 +167,9 @@ final class SolaceMessageListener implements XMLMessageListener {
         if (!ObserveUtils.isTracingEnabled()) {
             return null;
         }
-        SolaceObserverContext ctx = new SolaceObserverContext(CONTEXT_CONSUMER, url, destination);
+        SolaceObserverContext ctx = new SolaceObserverContext(CONTEXT_CONSUMER, url, destination)
+                .withVpn(vpn)
+                .withDestinationKind(destinationKind);
         if (traceContext != null && !traceContext.isEmpty()) {
             ctx.addProperty(ObservabilityConstants.PROPERTY_TRACE_PROPERTIES, traceContext);
         }
