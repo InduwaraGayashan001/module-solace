@@ -26,10 +26,13 @@ import io.ballerina.runtime.api.values.BObject;
 import io.ballerina.runtime.api.values.BString;
 import io.xlibb.solace.common.CommonUtils;
 import io.xlibb.solace.consumer.MessageConverter;
+import io.xlibb.solace.observability.SolaceMetricsUtil;
 
 import java.util.logging.Logger;
 
 import static io.xlibb.solace.common.Constants.NATIVE_TX_SESSION;
+import static io.xlibb.solace.observability.SolaceObservabilityConstants.ERROR_TYPE_ACKNOWLEDGE;
+import static io.xlibb.solace.observability.SolaceObservabilityConstants.ERROR_TYPE_NACK;
 
 /**
  * Caller actions - interop for the Ballerina Solace {@code Caller} supplied to a service's {@code onMessage} method.
@@ -62,14 +65,18 @@ public class CallerActions {
         try {
             XMLMessage nativeMessage = MessageConverter.extractNativeMessage(message);
             if (nativeMessage == null) {
-                return CommonUtils.createError("Cannot acknowledge: native message not found");
+                return settleFailure(caller, ERROR_TYPE_ACKNOWLEDGE,
+                        "Cannot acknowledge: native message not found");
             }
             Object result = CommonUtils.executeBlocking(nativeMessage::ackMessage);
             if (result instanceof BError bError) {
+                SolaceMetricsUtil.reportConsumerError(caller, ERROR_TYPE_ACKNOWLEDGE);
                 return bError;
             }
+            SolaceMetricsUtil.reportAck(caller);
             return null;
         } catch (Exception e) {
+            SolaceMetricsUtil.reportConsumerError(caller, ERROR_TYPE_ACKNOWLEDGE);
             return CommonUtils.createError("Failed to acknowledge message", e);
         }
     }
@@ -90,7 +97,7 @@ public class CallerActions {
         try {
             XMLMessage nativeMessage = MessageConverter.extractNativeMessage(message);
             if (nativeMessage == null) {
-                return CommonUtils.createError("Cannot NACK: native message not found");
+                return settleFailure(caller, ERROR_TYPE_NACK, "Cannot NACK: native message not found");
             }
             Object result = CommonUtils.executeBlocking(() -> {
                 XMLMessage.Outcome outcome = requeue ? XMLMessage.Outcome.FAILED : XMLMessage.Outcome.REJECTED;
@@ -98,12 +105,23 @@ public class CallerActions {
                 return null;
             });
             if (result instanceof BError bError) {
+                SolaceMetricsUtil.reportConsumerError(caller, ERROR_TYPE_NACK);
                 return bError;
             }
+            SolaceMetricsUtil.reportNack(caller, requeue);
             return null;
         } catch (Exception e) {
+            SolaceMetricsUtil.reportConsumerError(caller, ERROR_TYPE_NACK);
             return CommonUtils.createError("Failed to NACK message", e);
         }
+    }
+
+    /**
+     * Counts a settlement that failed before reaching the broker and returns the error.
+     */
+    private static BError settleFailure(BObject caller, String errorType, String errorMessage) {
+        SolaceMetricsUtil.reportConsumerError(caller, errorType);
+        return CommonUtils.createError(errorMessage);
     }
 
     /**
