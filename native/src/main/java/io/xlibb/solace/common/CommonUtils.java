@@ -114,10 +114,7 @@ public class CommonUtils {
 
     /**
      * Reports whether a received message is flagged by the broker as a redelivery.
-     * <p>
-     * The {@code redelivered} field is optional on the Ballerina {@code Message} record but is always populated on the
-     * consume path, so a missing value is treated as "not redelivered" rather than unknown.
-     *
+     * 
      * @param message the Ballerina message record
      * @return true if the broker marked this message as redelivered
      */
