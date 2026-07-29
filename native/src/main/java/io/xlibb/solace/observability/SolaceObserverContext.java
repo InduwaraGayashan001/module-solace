@@ -36,11 +36,35 @@ public class SolaceObserverContext extends ObserverContext {
 
     public SolaceObserverContext(String context, String url) {
         this(context);
-        addTag(SolaceObservabilityConstants.TAG_KEY_URL, url);
+        addTag(SolaceObservabilityConstants.TAG_KEY_URL, defaulted(url));
     }
 
     public SolaceObserverContext(String context, String url, String destination) {
         this(context, url);
-        addTag(SolaceObservabilityConstants.TAG_KEY_DESTINATION, destination);
+        addTag(SolaceObservabilityConstants.TAG_KEY_DESTINATION, defaulted(destination));
+    }
+
+    public SolaceObserverContext withVpn(String vpn) {
+        addTag(SolaceObservabilityConstants.TAG_KEY_VPN, defaulted(vpn));
+        return this;
+    }
+
+    public SolaceObserverContext withDestinationKind(String kind) {
+        addTag(SolaceObservabilityConstants.TAG_KEY_DESTINATION_KIND, defaulted(kind));
+        return this;
+    }
+
+    public SolaceObserverContext withDeliveryMode(String mode) {
+        addTag(SolaceObservabilityConstants.TAG_KEY_DELIVERY_MODE, defaulted(mode));
+        return this;
+    }
+
+    SolaceObserverContext withTag(String key, String value) {
+        addTag(key, defaulted(value));
+        return this;
+    }
+
+    private static String defaulted(String value) {
+        return value == null || value.isBlank() ? SolaceObservabilityConstants.UNKNOWN : value;
     }
 }
