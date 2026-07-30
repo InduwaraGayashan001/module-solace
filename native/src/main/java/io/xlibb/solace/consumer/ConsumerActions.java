@@ -176,7 +176,7 @@ public class ConsumerActions {
         SolaceTracingUtil.traceResourceInvocation(env, consumer);
         Boolean closed = (Boolean) consumer.getNativeData(NATIVE_CLOSED);
         if (closed != null && closed) {
-            return consumerFailure(consumer, ERROR_TYPE_RECEIVE, "Consumer is closed");
+            return reportConsumerFailure(consumer, ERROR_TYPE_RECEIVE, "Consumer is closed");
         }
         long timeoutMs = timeout.decimalValue().multiply(BigDecimal.valueOf(1000)).longValue();
         String subscriptionType = (String) consumer.getNativeData(NATIVE_SUBSCRIPTION_TYPE);
@@ -231,7 +231,7 @@ public class ConsumerActions {
         SolaceTracingUtil.traceResourceInvocation(env, consumer);
         Boolean closed = (Boolean) consumer.getNativeData(NATIVE_CLOSED);
         if (closed != null && closed) {
-            return consumerFailure(consumer, ERROR_TYPE_RECEIVE, "Consumer is closed");
+            return reportConsumerFailure(consumer, ERROR_TYPE_RECEIVE, "Consumer is closed");
         }
         String subscriptionType = (String) consumer.getNativeData(NATIVE_SUBSCRIPTION_TYPE);
         try {
@@ -290,7 +290,7 @@ public class ConsumerActions {
     /**
      * Counts a consumer-level failure and returns the error.
      */
-    private static BError consumerFailure(BObject consumer, String errorType, String errorMessage) {
+    private static BError reportConsumerFailure(BObject consumer, String errorType, String errorMessage) {
         SolaceMetricsUtil.reportConsumerError(consumer, errorType);
         return CommonUtils.createError(errorMessage);
     }
@@ -306,12 +306,12 @@ public class ConsumerActions {
         try {
             Boolean closed = (Boolean) consumer.getNativeData(NATIVE_CLOSED);
             if (closed != null && closed) {
-                return consumerFailure(consumer, ERROR_TYPE_ACKNOWLEDGE, "Consumer is closed");
+                return reportConsumerFailure(consumer, ERROR_TYPE_ACKNOWLEDGE, "Consumer is closed");
             }
 
             XMLMessage nativeMessage = MessageConverter.extractNativeMessage(message);
             if (nativeMessage == null) {
-                return consumerFailure(consumer, ERROR_TYPE_ACKNOWLEDGE,
+                return reportConsumerFailure(consumer, ERROR_TYPE_ACKNOWLEDGE,
                         "Cannot acknowledge: native message not found");
             }
 
@@ -340,12 +340,12 @@ public class ConsumerActions {
         try {
             Boolean closed = (Boolean) consumer.getNativeData(NATIVE_CLOSED);
             if (closed != null && closed) {
-                return consumerFailure(consumer, ERROR_TYPE_NACK, "Consumer is closed");
+                return reportConsumerFailure(consumer, ERROR_TYPE_NACK, "Consumer is closed");
             }
 
             XMLMessage nativeMessage = MessageConverter.extractNativeMessage(message);
             if (nativeMessage == null) {
-                return consumerFailure(consumer, ERROR_TYPE_NACK, "Cannot NACK: native message not found");
+                return reportConsumerFailure(consumer, ERROR_TYPE_NACK, "Cannot NACK: native message not found");
             }
 
             // Use settle() with appropriate outcome
@@ -377,19 +377,19 @@ public class ConsumerActions {
         try {
             Boolean closed = (Boolean) consumer.getNativeData(NATIVE_CLOSED);
             if (closed != null && closed) {
-                return consumerFailure(consumer, ERROR_TYPE_COMMIT, "Consumer is closed");
+                return reportConsumerFailure(consumer, ERROR_TYPE_COMMIT, "Consumer is closed");
             }
 
             Boolean transacted = (Boolean) consumer.getNativeData(NATIVE_TRANSACTED);
             if (transacted == null || !transacted) {
-                return consumerFailure(consumer, ERROR_TYPE_COMMIT,
+                return reportConsumerFailure(consumer, ERROR_TYPE_COMMIT,
                         "commit() can only be called on transacted consumers. " +
                                 "Set connectionConfig.transacted = true to enable transactions.");
             }
 
             TransactedSession txSession = (TransactedSession) consumer.getNativeData(NATIVE_TX_SESSION);
             if (txSession == null) {
-                return consumerFailure(consumer, ERROR_TYPE_COMMIT, "TransactedSession not initialized");
+                return reportConsumerFailure(consumer, ERROR_TYPE_COMMIT, "TransactedSession not initialized");
             }
 
             // Commit transaction on TransactedSession (blocking operation)
@@ -417,19 +417,19 @@ public class ConsumerActions {
         try {
             Boolean closed = (Boolean) consumer.getNativeData(NATIVE_CLOSED);
             if (closed != null && closed) {
-                return consumerFailure(consumer, ERROR_TYPE_ROLLBACK, "Consumer is closed");
+                return reportConsumerFailure(consumer, ERROR_TYPE_ROLLBACK, "Consumer is closed");
             }
 
             Boolean transacted = (Boolean) consumer.getNativeData(NATIVE_TRANSACTED);
             if (transacted == null || !transacted) {
-                return consumerFailure(consumer, ERROR_TYPE_ROLLBACK,
+                return reportConsumerFailure(consumer, ERROR_TYPE_ROLLBACK,
                         "rollback() can only be called on transacted consumers. " +
                                 "Set connectionConfig.transacted = true to enable transactions.");
             }
 
             TransactedSession txSession = (TransactedSession) consumer.getNativeData(NATIVE_TX_SESSION);
             if (txSession == null) {
-                return consumerFailure(consumer, ERROR_TYPE_ROLLBACK, "TransactedSession not initialized");
+                return reportConsumerFailure(consumer, ERROR_TYPE_ROLLBACK, "TransactedSession not initialized");
             }
 
             // Rollback transaction on TransactedSession (blocking operation)
