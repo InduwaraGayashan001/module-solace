@@ -153,12 +153,15 @@ public class ConsumerActions {
                 return CommonUtils.createError("Unknown subscription configuration type");
             }
 
-            SolaceMetricsUtil.reportNewConsumer(consumer);
-            return null;
         } catch (Exception e) {
             SolaceMetricsUtil.reportConnectionError(CONTEXT_CONSUMER, url.getValue(), vpnName);
             return CommonUtils.createError("Failed to initialize consumer", e);
         }
+
+        // Observability only, deliberately outside the block above: the consumer is fully created by this point, so a
+        // failure here must not report an init failure for an init that succeeded.
+        SolaceMetricsUtil.reportNewConsumer(consumer);
+        return null;
     }
 
     /**

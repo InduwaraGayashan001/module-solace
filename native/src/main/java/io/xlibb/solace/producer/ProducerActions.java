@@ -127,12 +127,15 @@ public class ProducerActions {
             producer.addNativeData(NATIVE_VPN, vpnName);
             producer.addNativeData(NATIVE_EVENT_HANDLER, eventHandler);
 
-            SolaceMetricsUtil.reportNewProducer(producer);
-            return null;
         } catch (Exception e) {
             SolaceMetricsUtil.reportConnectionError(CONTEXT_PRODUCER, url.getValue(), vpnName);
             return CommonUtils.createError("Failed to initialize producer", e);
         }
+
+        // Observability only, deliberately outside the block above: the producer is fully created by this point, so a
+        // failure here must not report an init failure for an init that succeeded.
+        SolaceMetricsUtil.reportNewProducer(producer);
+        return null;
     }
 
     /**
