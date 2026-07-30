@@ -314,8 +314,6 @@ public class ConsumerActions {
 
             Object result = CommonUtils.executeBlocking(nativeMessage::ackMessage);
             if (result instanceof BError) {
-                // executeBlocking turns a broker-side failure into a BError rather than throwing, so this - not the
-                // catch below - is the path a real ack failure takes.
                 SolaceMetricsUtil.reportConsumerError(consumer, ERROR_TYPE_ACKNOWLEDGE);
                 return (BError) result;
             }
@@ -495,12 +493,13 @@ public class ConsumerActions {
             consumer.addNativeData(NATIVE_TRANSACTED, null);
             consumer.addNativeData(NATIVE_SESSION, null);
 
-            SolaceSessionEventHandler.markDisconnected(consumer);
             SolaceMetricsUtil.reportConsumerClose(consumer);
             return null;
         } catch (Exception e) {
             SolaceMetricsUtil.reportConsumerError(consumer, ERROR_TYPE_CLOSE);
             return CommonUtils.createError("Failed to close consumer", e);
+        } finally {
+            SolaceSessionEventHandler.markDisconnected(consumer);
         }
     }
 }
