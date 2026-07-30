@@ -32,7 +32,9 @@ import java.util.logging.Logger;
 
 import static io.xlibb.solace.common.Constants.NATIVE_TX_SESSION;
 import static io.xlibb.solace.observability.SolaceObservabilityConstants.ERROR_TYPE_ACKNOWLEDGE;
+import static io.xlibb.solace.observability.SolaceObservabilityConstants.ERROR_TYPE_COMMIT;
 import static io.xlibb.solace.observability.SolaceObservabilityConstants.ERROR_TYPE_NACK;
+import static io.xlibb.solace.observability.SolaceObservabilityConstants.ERROR_TYPE_ROLLBACK;
 
 /**
  * Caller actions - interop for the Ballerina Solace {@code Caller} supplied to a service's {@code onMessage} method.
@@ -117,7 +119,7 @@ public class CallerActions {
     }
 
     /**
-     * Counts a settlement that failed before reaching the broker and returns the error.
+     * Counts a settlement or transaction-control call that failed before reaching the broker and returns the error.
      */
     private static BError settleFailure(BObject caller, String errorType, String errorMessage) {
         SolaceMetricsUtil.reportConsumerError(caller, errorType);
@@ -133,16 +135,21 @@ public class CallerActions {
     public static BError commit(BObject caller) {
         TransactedSession txSession = (TransactedSession) caller.getNativeData(NATIVE_TX_SESSION);
         if (txSession == null) {
-            return CommonUtils.createError("commit() can only be called when the listener connection is transacted. "
-                    + "Set transacted = true on the listener configuration to enable transactions.");
+            return settleFailure(caller, ERROR_TYPE_COMMIT,
+                    "commit() can only be called when the listener connection is transacted. "
+                            + "Set transacted = true on the listener configuration to enable transactions.");
         }
         try {
             Object result = CommonUtils.executeBlocking(txSession::commit);
             if (result instanceof BError bError) {
+                // executeBlocking returns a broker-side failure as a BError rather than throwing, so this - not the
+                // catch below - is the path a real commit failure takes.
+                SolaceMetricsUtil.reportConsumerError(caller, ERROR_TYPE_COMMIT);
                 return bError;
             }
             return null;
         } catch (Exception e) {
+            SolaceMetricsUtil.reportConsumerError(caller, ERROR_TYPE_COMMIT);
             return CommonUtils.createError("Failed to commit transaction", e);
         }
     }
@@ -156,16 +163,20 @@ public class CallerActions {
     public static BError rollback(BObject caller) {
         TransactedSession txSession = (TransactedSession) caller.getNativeData(NATIVE_TX_SESSION);
         if (txSession == null) {
-            return CommonUtils.createError("rollback() can only be called when the listener connection is transacted. "
-                    + "Set transacted = true on the listener configuration to enable transactions.");
+            return settleFailure(caller, ERROR_TYPE_ROLLBACK,
+                    "rollback() can only be called when the listener connection is transacted. "
+                            + "Set transacted = true on the listener configuration to enable transactions.");
         }
         try {
             Object result = CommonUtils.executeBlocking(txSession::rollback);
             if (result instanceof BError bError) {
+                // As with commit(), a broker-side failure arrives here as a BError, not as an exception.
+                SolaceMetricsUtil.reportConsumerError(caller, ERROR_TYPE_ROLLBACK);
                 return bError;
             }
             return null;
         } catch (Exception e) {
+            SolaceMetricsUtil.reportConsumerError(caller, ERROR_TYPE_ROLLBACK);
             return CommonUtils.createError("Failed to rollback transaction", e);
         }
     }
