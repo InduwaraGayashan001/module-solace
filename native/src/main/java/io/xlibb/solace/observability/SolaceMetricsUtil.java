@@ -18,12 +18,14 @@
 
 package io.xlibb.solace.observability;
 
+import io.ballerina.runtime.api.values.BError;
 import io.ballerina.runtime.api.values.BObject;
 import io.ballerina.runtime.observability.ObserveUtils;
 import io.ballerina.runtime.observability.metrics.DefaultMetricRegistry;
 import io.ballerina.runtime.observability.metrics.MetricId;
 import io.ballerina.runtime.observability.metrics.MetricRegistry;
 import io.ballerina.runtime.observability.metrics.StatisticConfig;
+import io.xlibb.solace.common.CommonUtils;
 
 import static io.xlibb.solace.common.Constants.NATIVE_DESTINATION;
 import static io.xlibb.solace.common.Constants.NATIVE_DESTINATION_KIND;
@@ -105,13 +107,6 @@ public class SolaceMetricsUtil {
 
     /**
      * Reports a successful publish along with how long the publish call took.
-     *
-     * @param producer        the Ballerina producer object
-     * @param destination     the destination name published to
-     * @param destinationKind {@code queue} or {@code topic}
-     * @param deliveryMode    the message's delivery mode (PERSISTENT / NON_PERSISTENT / DIRECT)
-     * @param size            the payload size in bytes
-     * @param durationNanos   elapsed time of the publish call in nanoseconds
      */
     public static void reportPublish(BObject producer, String destination, String destinationKind,
                                      String deliveryMode, int size, long durationNanos) {
@@ -231,6 +226,21 @@ public class SolaceMetricsUtil {
         SolaceObserverContext ctx = consumerDestinationContext(consumer);
         ctx.addTag(TAG_KEY_ERROR_TYPE, errorType);
         incrementCounter(ctx, METRIC_ERRORS[0], METRIC_ERRORS[1], 1);
+    }
+
+    /**
+     * Counts a consumer-side failure and returns the error to hand back to the caller, so a guard clause can report
+     * and fail in one statement. Shared by the pull consumer and the listener's {@code Caller}, whose guards report
+     * identically - both write {@code errors} against the consumer's own tag set.
+     *
+     * @param consumer     the Ballerina consumer or caller object carrying the observability tags
+     * @param errorType    the {@code error_type} to record
+     * @param errorMessage the message for the returned error
+     * @return the error to return to the caller
+     */
+    public static BError reportConsumerFailure(BObject consumer, String errorType, String errorMessage) {
+        reportConsumerError(consumer, errorType);
+        return CommonUtils.createError(errorMessage);
     }
 
     /**

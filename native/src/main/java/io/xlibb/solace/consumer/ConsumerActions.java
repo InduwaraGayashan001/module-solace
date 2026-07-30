@@ -62,6 +62,7 @@ import static io.xlibb.solace.consumer.ConsumerUtils.SUBSCRIPTION_TYPE_QUEUE;
 import static io.xlibb.solace.consumer.ConsumerUtils.createDirectTopicConsumer;
 import static io.xlibb.solace.consumer.ConsumerUtils.createDurableTopicConsumer;
 import static io.xlibb.solace.consumer.ConsumerUtils.createQueueConsumer;
+import static io.xlibb.solace.observability.SolaceMetricsUtil.reportConsumerFailure;
 import static io.xlibb.solace.observability.SolaceObservabilityConstants.CONTEXT_CONSUMER;
 import static io.xlibb.solace.observability.SolaceObservabilityConstants.DESTINATION_KIND_QUEUE;
 import static io.xlibb.solace.observability.SolaceObservabilityConstants.DESTINATION_KIND_TOPIC;
@@ -153,12 +154,15 @@ public class ConsumerActions {
                 return CommonUtils.createError("Unknown subscription configuration type");
             }
 
-            SolaceMetricsUtil.reportNewConsumer(consumer);
-            return null;
         } catch (Exception e) {
             SolaceMetricsUtil.reportConnectionError(CONTEXT_CONSUMER, url.getValue(), vpnName);
             return CommonUtils.createError("Failed to initialize consumer", e);
         }
+
+        // Observability only, deliberately outside the block above: the consumer is fully created by this point, so a
+        // failure here must not report an init failure for an init that succeeded.
+        SolaceMetricsUtil.reportNewConsumer(consumer);
+        return null;
     }
 
     /**
@@ -173,7 +177,7 @@ public class ConsumerActions {
         SolaceTracingUtil.traceResourceInvocation(env, consumer);
         Boolean closed = (Boolean) consumer.getNativeData(NATIVE_CLOSED);
         if (closed != null && closed) {
-            return consumerFailure(consumer, ERROR_TYPE_RECEIVE, "Consumer is closed");
+            return reportConsumerFailure(consumer, ERROR_TYPE_RECEIVE, "Consumer is closed");
         }
         long timeoutMs = timeout.decimalValue().multiply(BigDecimal.valueOf(1000)).longValue();
         String subscriptionType = (String) consumer.getNativeData(NATIVE_SUBSCRIPTION_TYPE);
@@ -228,7 +232,7 @@ public class ConsumerActions {
         SolaceTracingUtil.traceResourceInvocation(env, consumer);
         Boolean closed = (Boolean) consumer.getNativeData(NATIVE_CLOSED);
         if (closed != null && closed) {
-            return consumerFailure(consumer, ERROR_TYPE_RECEIVE, "Consumer is closed");
+            return reportConsumerFailure(consumer, ERROR_TYPE_RECEIVE, "Consumer is closed");
         }
         String subscriptionType = (String) consumer.getNativeData(NATIVE_SUBSCRIPTION_TYPE);
         try {
@@ -285,14 +289,6 @@ public class ConsumerActions {
     }
 
     /**
-     * Counts a consumer-level failure and returns the error.
-     */
-    private static BError consumerFailure(BObject consumer, String errorType, String errorMessage) {
-        SolaceMetricsUtil.reportConsumerError(consumer, errorType);
-        return CommonUtils.createError(errorMessage);
-    }
-
-    /**
      * Acknowledge a message.
      *
      * @param consumer the Ballerina consumer object
@@ -303,19 +299,17 @@ public class ConsumerActions {
         try {
             Boolean closed = (Boolean) consumer.getNativeData(NATIVE_CLOSED);
             if (closed != null && closed) {
-                return consumerFailure(consumer, ERROR_TYPE_ACKNOWLEDGE, "Consumer is closed");
+                return reportConsumerFailure(consumer, ERROR_TYPE_ACKNOWLEDGE, "Consumer is closed");
             }
 
             XMLMessage nativeMessage = MessageConverter.extractNativeMessage(message);
             if (nativeMessage == null) {
-                return consumerFailure(consumer, ERROR_TYPE_ACKNOWLEDGE,
+                return reportConsumerFailure(consumer, ERROR_TYPE_ACKNOWLEDGE,
                         "Cannot acknowledge: native message not found");
             }
 
             Object result = CommonUtils.executeBlocking(nativeMessage::ackMessage);
             if (result instanceof BError) {
-                // executeBlocking turns a broker-side failure into a BError rather than throwing, so this - not the
-                // catch below - is the path a real ack failure takes.
                 SolaceMetricsUtil.reportConsumerError(consumer, ERROR_TYPE_ACKNOWLEDGE);
                 return (BError) result;
             }
@@ -339,12 +333,12 @@ public class ConsumerActions {
         try {
             Boolean closed = (Boolean) consumer.getNativeData(NATIVE_CLOSED);
             if (closed != null && closed) {
-                return consumerFailure(consumer, ERROR_TYPE_NACK, "Consumer is closed");
+                return reportConsumerFailure(consumer, ERROR_TYPE_NACK, "Consumer is closed");
             }
 
             XMLMessage nativeMessage = MessageConverter.extractNativeMessage(message);
             if (nativeMessage == null) {
-                return consumerFailure(consumer, ERROR_TYPE_NACK, "Cannot NACK: native message not found");
+                return reportConsumerFailure(consumer, ERROR_TYPE_NACK, "Cannot NACK: native message not found");
             }
 
             // Use settle() with appropriate outcome
@@ -376,19 +370,19 @@ public class ConsumerActions {
         try {
             Boolean closed = (Boolean) consumer.getNativeData(NATIVE_CLOSED);
             if (closed != null && closed) {
-                return consumerFailure(consumer, ERROR_TYPE_COMMIT, "Consumer is closed");
+                return reportConsumerFailure(consumer, ERROR_TYPE_COMMIT, "Consumer is closed");
             }
 
             Boolean transacted = (Boolean) consumer.getNativeData(NATIVE_TRANSACTED);
             if (transacted == null || !transacted) {
-                return consumerFailure(consumer, ERROR_TYPE_COMMIT,
+                return reportConsumerFailure(consumer, ERROR_TYPE_COMMIT,
                         "commit() can only be called on transacted consumers. " +
                                 "Set connectionConfig.transacted = true to enable transactions.");
             }
 
             TransactedSession txSession = (TransactedSession) consumer.getNativeData(NATIVE_TX_SESSION);
             if (txSession == null) {
-                return consumerFailure(consumer, ERROR_TYPE_COMMIT, "TransactedSession not initialized");
+                return reportConsumerFailure(consumer, ERROR_TYPE_COMMIT, "TransactedSession not initialized");
             }
 
             // Commit transaction on TransactedSession (blocking operation)
@@ -416,19 +410,19 @@ public class ConsumerActions {
         try {
             Boolean closed = (Boolean) consumer.getNativeData(NATIVE_CLOSED);
             if (closed != null && closed) {
-                return consumerFailure(consumer, ERROR_TYPE_ROLLBACK, "Consumer is closed");
+                return reportConsumerFailure(consumer, ERROR_TYPE_ROLLBACK, "Consumer is closed");
             }
 
             Boolean transacted = (Boolean) consumer.getNativeData(NATIVE_TRANSACTED);
             if (transacted == null || !transacted) {
-                return consumerFailure(consumer, ERROR_TYPE_ROLLBACK,
+                return reportConsumerFailure(consumer, ERROR_TYPE_ROLLBACK,
                         "rollback() can only be called on transacted consumers. " +
                                 "Set connectionConfig.transacted = true to enable transactions.");
             }
 
             TransactedSession txSession = (TransactedSession) consumer.getNativeData(NATIVE_TX_SESSION);
             if (txSession == null) {
-                return consumerFailure(consumer, ERROR_TYPE_ROLLBACK, "TransactedSession not initialized");
+                return reportConsumerFailure(consumer, ERROR_TYPE_ROLLBACK, "TransactedSession not initialized");
             }
 
             // Rollback transaction on TransactedSession (blocking operation)
@@ -495,12 +489,13 @@ public class ConsumerActions {
             consumer.addNativeData(NATIVE_TRANSACTED, null);
             consumer.addNativeData(NATIVE_SESSION, null);
 
-            SolaceSessionEventHandler.markDisconnected(consumer);
             SolaceMetricsUtil.reportConsumerClose(consumer);
             return null;
         } catch (Exception e) {
             SolaceMetricsUtil.reportConsumerError(consumer, ERROR_TYPE_CLOSE);
             return CommonUtils.createError("Failed to close consumer", e);
+        } finally {
+            SolaceSessionEventHandler.markDisconnected(consumer);
         }
     }
 }

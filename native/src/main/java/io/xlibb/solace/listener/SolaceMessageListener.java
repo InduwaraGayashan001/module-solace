@@ -43,6 +43,7 @@ import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 
 import static io.xlibb.solace.observability.SolaceObservabilityConstants.CONTEXT_CONSUMER;
+import static io.xlibb.solace.observability.SolaceObservabilityConstants.ERROR_TYPE_ACKNOWLEDGE;
 import static io.xlibb.solace.observability.SolaceObservabilityConstants.ERROR_TYPE_DISPATCH;
 import static io.xlibb.solace.observability.SolaceObservabilityConstants.ERROR_TYPE_RECEIVE;
 
@@ -122,7 +123,7 @@ final class SolaceMessageListener implements XMLMessageListener {
             }
             // In AUTO_ACK mode the flow is created with client acknowledgement, so settle on success here.
             if (autoAck) {
-                message.ackMessage();
+                settleAutoAck(message, traceContext);
             }
         } catch (BError bError) {
             dispatchError(bError, traceContext, ERROR_TYPE_DISPATCH);
@@ -132,6 +133,24 @@ final class SolaceMessageListener implements XMLMessageListener {
         } finally {
             SolaceMetricsUtil.reportProcessDuration(url, vpn, destination, destinationKind,
                     System.nanoTime() - startNanos);
+        }
+    }
+
+    /**
+     * Settles a successfully processed message in AUTO_ACK mode.
+     * <p>
+     * The settlement is counted like an explicit {@code caller->ack()} - without it, {@code acks} silently
+     * undercounts auto-ack services and {@code consumed - acks} reads as a permanent backlog. A failure here is the
+     * broker's, not the service's, so it is reported as an acknowledgement error rather than a dispatch one; it is
+     * caught locally so the enclosing dispatch handler does not reclassify it.
+     */
+    private void settleAutoAck(BytesXMLMessage message, Map<String, String> traceContext) {
+        try {
+            message.ackMessage();
+            SolaceMetricsUtil.reportAck(caller);
+        } catch (Throwable t) {
+            dispatchError(CommonUtils.createError("Failed to acknowledge message",
+                    t instanceof Exception e ? e : new Exception(t)), traceContext, ERROR_TYPE_ACKNOWLEDGE);
         }
     }
 
