@@ -147,7 +147,6 @@ public class SolaceMetricsUtil {
         if (!ObserveUtils.isMetricsEnabled()) {
             return;
         }
-        // As with reportPublish, share one tag set across the per-message metrics.
         SolaceObserverContext ctx = consumeContext(url, vpn, destination, destinationKind);
         incrementCounter(ctx, METRIC_CONSUMED[0], METRIC_CONSUMED[1], 1);
         incrementCounter(ctx, METRIC_CONSUMED_SIZE[0], METRIC_CONSUMED_SIZE[1], size);
@@ -174,8 +173,7 @@ public class SolaceMetricsUtil {
     }
 
     /**
-     * Reports a negative acknowledgement. {@code requeue} selects the JCSMP {@code FAILED} outcome (redelivery);
-     * otherwise {@code REJECTED} sends the message to the dead message queue.
+     * Reports a negative acknowledgement.
      */
     public static void reportNack(BObject consumer, boolean requeue) {
         if (!ObserveUtils.isMetricsEnabled()) {
@@ -187,7 +185,7 @@ public class SolaceMetricsUtil {
     }
 
     /**
-     * Records how long a push-based service's {@code onMessage} took, including any settlement performed inside it.
+     * Records how long a push-based service's {@code onMessage} took.
      */
     public static void reportProcessDuration(String url, String vpn, String destination, String destinationKind,
                                              long durationNanos) {
@@ -229,14 +227,7 @@ public class SolaceMetricsUtil {
     }
 
     /**
-     * Counts a consumer-side failure and returns the error to hand back to the caller, so a guard clause can report
-     * and fail in one statement. Shared by the pull consumer and the listener's {@code Caller}, whose guards report
-     * identically - both write {@code errors} against the consumer's own tag set.
-     *
-     * @param consumer     the Ballerina consumer or caller object carrying the observability tags
-     * @param errorType    the {@code error_type} to record
-     * @param errorMessage the message for the returned error
-     * @return the error to return to the caller
+     * Counts a consumer-side failure and returns the error to hand back to the caller.
      */
     public static BError reportConsumerFailure(BObject consumer, String errorType, String errorMessage) {
         reportConsumerError(consumer, errorType);
@@ -244,7 +235,7 @@ public class SolaceMetricsUtil {
     }
 
     /**
-     * Reports a consumer error for the push-based listener path .
+     * Reports a consumer error for the push-based listener path.
      */
     public static void reportConsumerError(String url, String vpn, String destination, String destinationKind,
                                            String errorType) {
@@ -270,11 +261,6 @@ public class SolaceMetricsUtil {
 
     /**
      * Counts a session connectivity change signalled by JCSMP.
-     * 
-     * @param context the owning context ({@code producer}, {@code consumer} or {@code listener})
-     * @param url     the broker URL
-     * @param vpn     the message VPN
-     * @param event   {@code reconnecting}, {@code reconnected} or {@code down}
      */
     public static void reportSessionEvent(String context, String url, String vpn, String event) {
         if (!ObserveUtils.isMetricsEnabled()) {

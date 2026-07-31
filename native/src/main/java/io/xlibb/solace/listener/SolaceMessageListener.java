@@ -138,11 +138,6 @@ final class SolaceMessageListener implements XMLMessageListener {
 
     /**
      * Settles a successfully processed message in AUTO_ACK mode.
-     * <p>
-     * The settlement is counted like an explicit {@code caller->ack()} - without it, {@code acks} silently
-     * undercounts auto-ack services and {@code consumed - acks} reads as a permanent backlog. A failure here is the
-     * broker's, not the service's, so it is reported as an acknowledgement error rather than a dispatch one; it is
-     * caught locally so the enclosing dispatch handler does not reclassify it.
      */
     private void settleAutoAck(BytesXMLMessage message, Map<String, String> traceContext) {
         try {

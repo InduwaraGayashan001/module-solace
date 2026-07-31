@@ -69,7 +69,6 @@ public class SolaceObservabilityConstants {
     public static final String ERROR_TYPE_NACK = "nack";
     public static final String ERROR_TYPE_COMMIT = "commit";
     public static final String ERROR_TYPE_ROLLBACK = "rollback";
-    /** A failure raised by the service's {@code onMessage} - not a broker-side receive failure. */
     public static final String ERROR_TYPE_DISPATCH = "dispatch";
 
     public static final String CONTEXT_PRODUCER = "producer";

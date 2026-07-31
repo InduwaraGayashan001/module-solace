@@ -93,9 +93,6 @@ public class CommonUtils {
 
     /**
      * Computes the byte size of a Ballerina Solace message's payload, for observability metrics.
-     * <p>
-     * The message {@code payload} is typed {@code byte[]}, so its size is exactly the array length. Any other
-     * shape (which the record type does not permit) is reported as 0 rather than estimated.
      *
      * @param message the Ballerina message record
      * @return the payload size in bytes, or 0 if it cannot be determined
