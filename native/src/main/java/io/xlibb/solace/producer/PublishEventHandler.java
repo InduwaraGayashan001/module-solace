@@ -20,35 +20,49 @@ package io.xlibb.solace.producer;
 
 import com.solacesystems.jcsmp.JCSMPException;
 import com.solacesystems.jcsmp.JCSMPStreamingPublishCorrelatingEventHandler;
+import io.xlibb.solace.observability.SolaceMetricsUtil;
 
 /**
  * Handler for JCSMP streaming publish events.
- * Manages acknowledgements and errors for guaranteed message delivery.
+ * 
  */
 public class PublishEventHandler implements JCSMPStreamingPublishCorrelatingEventHandler {
+
+    private final String url;
+    private final String vpn;
+
+    PublishEventHandler(String url, String vpn) {
+        this.url = url;
+        this.vpn = vpn;
+    }
 
     /**
      * Called when a publisher acknowledgement is received for a guaranteed delivery message.
      *
-     * @param key  The correlation key of the message being acknowledged
+     * @param key The correlation key of the message being acknowledged
      */
     @Override
     public void responseReceivedEx(Object key) {
-        // Log successful acknowledgement if needed
-        // For now, we silently acknowledge success
+        record(true);
     }
 
     /**
      * Called when an error occurs during message publishing.
      *
-     * @param key The correlation key of the message with which the error condition is associated
-     * @param cause The error condition
+     * @param key       The correlation key of the message with which the error condition is associated
+     * @param cause     The error condition
      * @param timestamp The time of the error given by `System.currentTimeMillis()`
      */
     @Override
     public void handleErrorEx(Object key, JCSMPException cause, long timestamp) {
-        // Log error if needed
-        // Error handling can be enhanced in future implementations
-        // For now, we log the error
+        record(false);
+    }
+
+    private void record(boolean accepted) {
+        try {
+            SolaceMetricsUtil.reportPublishConfirm(url, vpn, accepted);
+        } catch (Throwable ignored) {
+            // A metrics failure must never disturb the JCSMP dispatch thread.
+        }
     }
 }

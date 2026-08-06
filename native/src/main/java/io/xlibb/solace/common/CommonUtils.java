@@ -31,6 +31,7 @@ import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 
 import static io.xlibb.solace.common.MessageFieldConstants.PAYLOAD_KEY;
+import static io.xlibb.solace.common.MessageFieldConstants.REDELIVERED_KEY;
 
 /**
  * Utility class for common operations like error creation and virtual thread execution.
@@ -92,9 +93,6 @@ public class CommonUtils {
 
     /**
      * Computes the byte size of a Ballerina Solace message's payload, for observability metrics.
-     * <p>
-     * The message {@code payload} is typed {@code byte[]}, so its size is exactly the array length. Any other
-     * shape (which the record type does not permit) is reported as 0 rather than estimated.
      *
      * @param message the Ballerina message record
      * @return the payload size in bytes, or 0 if it cannot be determined
@@ -109,6 +107,19 @@ public class CommonUtils {
             return arr.size();
         }
         return 0;
+    }
+
+    /**
+     * Reports whether a received message is flagged by the broker as a redelivery.
+     * 
+     * @param message the Ballerina message record
+     * @return true if the broker marked this message as redelivered
+     */
+    public static boolean isRedelivered(BMap<BString, Object> message) {
+        if (message == null) {
+            return false;
+        }
+        return Boolean.TRUE.equals(message.get(REDELIVERED_KEY));
     }
 
     /**

@@ -43,9 +43,6 @@ import static io.xlibb.solace.observability.SolaceObservabilityConstants.TAG_KEY
  */
 public class SolaceTracingUtil {
 
-    // Prefix applied when surfacing an upstream message's trace-context as tags on a pull-based receive span.
-    private static final String TAG_KEY_UPSTREAM_PREFIX = "upstream.";
-
     public static void traceResourceInvocation(Environment env, BObject object, String destination) {
         if (!ObserveUtils.isTracingEnabled()) {
             return;
@@ -73,11 +70,7 @@ public class SolaceTracingUtil {
     }
 
     /**
-     * Returns the current span's context serialized by the configured OpenTelemetry propagator (W3C
-     * traceparent/tracestate, Jaeger uber-trace-id, B3, etc. - whichever the active tracing provider installs),
-     * suitable for injecting into an outbound message's properties so a downstream consumer can correlate its
-     * trace with this publish. {@code ObserveUtils.getContextProperties} delegates to
-     * {@code TracersStore.getPropagators()}, so this is provider-agnostic by construction.
+     * Returns the current span's context serialized by the configured OpenTelemetry propagator.
      *
      * @param env the Ballerina environment of the publishing native call
      * @return the carrier map, or null if tracing is disabled or there is no active span to propagate
@@ -95,11 +88,6 @@ public class SolaceTracingUtil {
 
     /**
      * Reads the trace-context entries (if any) out of a received Ballerina message's {@code properties} field.
-     * <p>
-     * The exact property keys are not assumed to be W3C {@code traceparent}/{@code tracestate}: they are taken from
-     * the configured OpenTelemetry propagator's {@link io.opentelemetry.context.propagation.TextMapPropagator#fields()}
-     * - the same fields the publishing side injected via {@link #getTraceContextHeaders} - so extraction stays
-     * correct whatever propagation format the active tracing provider uses.
      *
      * @param message the Ballerina message record
      * @return a (possibly empty) carrier map of the trace-context entries found
@@ -121,41 +109,12 @@ public class SolaceTracingUtil {
         return carrier;
     }
 
-    /**
-     * The message-property keys the active OpenTelemetry propagator uses to carry trace context, read from
-     * {@link TracersStore}. Returns an empty set when tracing is not initialized so callers degrade to a no-op.
-     */
     private static Collection<String> propagationFields() {
         TracersStore store = TracersStore.getInstance();
         if (!store.isInitialized()) {
             return Collections.emptyList();
         }
         return store.getPropagators().getTextMapPropagator().fields();
-    }
-
-    /**
-     * Tags the ambient span (of a pull-based {@code receive}/{@code receiveNoWait} client action) with the
-     * upstream trace-context carried on the received message. The span for these client actions is already started
-     * by the time the native call runs - before the message (and so its trace-context) is known - so a genuine
-     * parent-span link isn't possible here; the extracted context is surfaced as tags instead, for manual
-     * correlation across the publish/consume boundary.
-     *
-     * @param env     the Ballerina environment of the receiving native call
-     * @param message the received Ballerina message record
-     */
-    public static void tagUpstreamTraceContext(Environment env, BMap<BString, Object> message) {
-        if (!ObserveUtils.isTracingEnabled()) {
-            return;
-        }
-        Map<String, String> carrier = extractTraceContextHeaders(message);
-        if (carrier.isEmpty()) {
-            return;
-        }
-        ObserverContext ctx = ObserveUtils.getObserverContextOfCurrentFrame(env);
-        if (ctx == null) {
-            return;
-        }
-        carrier.forEach((key, value) -> ctx.addTag(TAG_KEY_UPSTREAM_PREFIX + key, value));
     }
 
     private static void putIfPresent(Map<String, String> carrier, BMap<BString, Object> props, String key) {

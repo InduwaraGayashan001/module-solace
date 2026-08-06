@@ -34,6 +34,9 @@ public class Constants {
     public static final String NATIVE_MESSAGE = "native.message";
     public static final String NATIVE_URL = "native.url";
     public static final String NATIVE_DESTINATION = "native.destination";
+    public static final String NATIVE_VPN = "native.vpn";
+    public static final String NATIVE_DESTINATION_KIND = "native.destination.kind";
+    public static final String NATIVE_EVENT_HANDLER = "native.session.event.handler";
 
     // Listener-specific native data keys
     public static final String NATIVE_RUNTIME = "native.runtime";

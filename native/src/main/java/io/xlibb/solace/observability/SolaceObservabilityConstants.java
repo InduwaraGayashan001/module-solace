@@ -33,11 +33,33 @@ public class SolaceObservabilityConstants {
     static final String[] METRIC_CONSUMED_SIZE = {"consumed_size", "Total size in bytes of messages consumed"};
     static final String[] METRIC_ERRORS = {"errors", "Number of errors"};
 
+    static final String[] METRIC_ACKS = {"acks", "Number of messages acknowledged"};
+    static final String[] METRIC_NACKS = {"nacks", "Number of messages negatively acknowledged"};
+    static final String[] METRIC_REDELIVERED =
+            {"redelivered", "Number of consumed messages flagged as redelivered by the broker"};
+    static final String[] METRIC_EMPTY_RECEIVES =
+            {"empty_receives", "Number of receive calls that returned no message"};
+    static final String[] METRIC_PUBLISH_CONFIRMS =
+            {"publish_confirms", "Number of broker publish acknowledgements for guaranteed messages"};
+    static final String[] METRIC_RECONNECTS = {"reconnects", "Number of session connectivity events"};
+    static final String[] METRIC_CONNECTIONS_UP =
+            {"connections_up", "Number of sessions currently connected to the broker"};
+    static final String[] METRIC_PUBLISH_DURATION =
+            {"publish_duration_seconds", "Time taken by a publish call, in seconds"};
+    static final String[] METRIC_PROCESS_DURATION =
+            {"process_duration_seconds", "Time taken to dispatch a message to the service, in seconds"};
+
     static final String TAG_KEY_URL = "url";
     static final String TAG_KEY_DESTINATION = "destination";
     static final String TAG_KEY_ERROR_TYPE = "error_type";
     static final String TAG_KEY_CONTEXT = "context";
     static final String TAG_KEY_LISTENER_NAME = "listener.name";
+    static final String TAG_KEY_VPN = "vpn";
+    static final String TAG_KEY_DESTINATION_KIND = "destination_kind";
+    static final String TAG_KEY_DELIVERY_MODE = "delivery_mode";
+    static final String TAG_KEY_OUTCOME = "outcome";
+    static final String TAG_KEY_RESULT = "result";
+    static final String TAG_KEY_EVENT = "event";
 
     public static final String ERROR_TYPE_CONNECTION = "connection";
     public static final String ERROR_TYPE_PUBLISH = "publish";
@@ -47,9 +69,24 @@ public class SolaceObservabilityConstants {
     public static final String ERROR_TYPE_NACK = "nack";
     public static final String ERROR_TYPE_COMMIT = "commit";
     public static final String ERROR_TYPE_ROLLBACK = "rollback";
+    public static final String ERROR_TYPE_DISPATCH = "dispatch";
 
     public static final String CONTEXT_PRODUCER = "producer";
     public static final String CONTEXT_CONSUMER = "consumer";
+    public static final String CONTEXT_LISTENER = "listener";
+
+    public static final String DESTINATION_KIND_QUEUE = "queue";
+    public static final String DESTINATION_KIND_TOPIC = "topic";
+
+    public static final String NACK_OUTCOME_REQUEUE = "requeue";
+    public static final String NACK_OUTCOME_DMQ = "dmq";
+
+    public static final String CONFIRM_ACCEPTED = "accepted";
+    public static final String CONFIRM_REJECTED = "rejected";
+
+    public static final String EVENT_RECONNECTING = "reconnecting";
+    public static final String EVENT_RECONNECTED = "reconnected";
+    public static final String EVENT_DOWN = "down";
 
     public static final String UNKNOWN = "unknown";
 

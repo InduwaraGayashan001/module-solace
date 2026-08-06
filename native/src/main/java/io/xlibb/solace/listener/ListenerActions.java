@@ -52,11 +52,16 @@ import io.xlibb.solace.config.QueueConsumerConfig;
 import io.xlibb.solace.config.TopicConsumerConfig;
 import io.xlibb.solace.consumer.AcknowledgementMode;
 import io.xlibb.solace.consumer.ConsumerUtils;
+import io.xlibb.solace.observability.SolaceMetricsUtil;
+import io.xlibb.solace.observability.SolaceSessionEventHandler;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
 
 import static io.xlibb.solace.common.Constants.NATIVE_CLOSED;
+import static io.xlibb.solace.common.Constants.NATIVE_DESTINATION;
+import static io.xlibb.solace.common.Constants.NATIVE_DESTINATION_KIND;
+import static io.xlibb.solace.common.Constants.NATIVE_EVENT_HANDLER;
 import static io.xlibb.solace.common.Constants.NATIVE_RUNTIME;
 import static io.xlibb.solace.common.Constants.NATIVE_SERVICES;
 import static io.xlibb.solace.common.Constants.NATIVE_SESSION;
@@ -64,9 +69,14 @@ import static io.xlibb.solace.common.Constants.NATIVE_STARTED;
 import static io.xlibb.solace.common.Constants.NATIVE_TRANSACTED;
 import static io.xlibb.solace.common.Constants.NATIVE_TX_SESSION;
 import static io.xlibb.solace.common.Constants.NATIVE_URL;
+import static io.xlibb.solace.common.Constants.NATIVE_VPN;
 import static io.xlibb.solace.consumer.ConsumerUtils.SUBSCRIPTION_TYPE_DIRECT_TOPIC;
 import static io.xlibb.solace.consumer.ConsumerUtils.SUBSCRIPTION_TYPE_DURABLE_TOPIC;
 import static io.xlibb.solace.consumer.ConsumerUtils.SUBSCRIPTION_TYPE_QUEUE;
+import static io.xlibb.solace.observability.SolaceObservabilityConstants.CONTEXT_LISTENER;
+import static io.xlibb.solace.observability.SolaceObservabilityConstants.DESTINATION_KIND_QUEUE;
+import static io.xlibb.solace.observability.SolaceObservabilityConstants.DESTINATION_KIND_TOPIC;
+import static io.xlibb.solace.observability.SolaceObservabilityConstants.UNKNOWN;
 
 /**
  * Listener actions - entry point for the Ballerina Solace {@code Listener} interop. Manages a JCSMP session and a set
@@ -89,12 +99,16 @@ public class ListenerActions {
      * @return null on success, BError on failure
      */
     public static Object init(Environment env, BObject listener, BString url, BMap<BString, Object> config) {
+        String vpnName = UNKNOWN;
         try {
             ConnectionConfiguration connectionConfig = new ConnectionConfiguration(config);
+            vpnName = connectionConfig.vpnName();
             JCSMPProperties props = ConfigurationUtils.buildJCSMPProperties(url.getValue(), connectionConfig);
-
-            JCSMPSession session = JCSMPFactory.onlyInstance().createSession(props);
+            SolaceSessionEventHandler eventHandler =
+                    new SolaceSessionEventHandler(CONTEXT_LISTENER, url.getValue(), vpnName);
+            JCSMPSession session = JCSMPFactory.onlyInstance().createSession(props, null, eventHandler);
             session.connect();
+            eventHandler.markConnected();
 
             boolean isTransacted = connectionConfig.transacted();
             TransactedSession txSession = isTransacted ? session.createTransactedSession() : null;
@@ -105,10 +119,13 @@ public class ListenerActions {
             listener.addNativeData(NATIVE_CLOSED, false);
             listener.addNativeData(NATIVE_STARTED, false);
             listener.addNativeData(NATIVE_URL, url.getValue());
+            listener.addNativeData(NATIVE_VPN, vpnName);
+            listener.addNativeData(NATIVE_EVENT_HANDLER, eventHandler);
             listener.addNativeData(NATIVE_RUNTIME, env.getRuntime());
             listener.addNativeData(NATIVE_SERVICES, new LinkedHashMap<BObject, AttachedService>());
             return null;
         } catch (Exception e) {
+            SolaceMetricsUtil.reportConnectionError(CONTEXT_LISTENER, url.getValue(), vpnName);
             return CommonUtils.createError("Failed to initialize listener", e);
         }
     }
@@ -157,8 +174,6 @@ public class ListenerActions {
                 }
             }
 
-            // Direct topic messages are not guaranteed and carry no acknowledgement, so auto-settle only
-            // applies to flow-based subscriptions (queues and durable topic endpoints).
             boolean directTopic = subscriptionConfig instanceof TopicConsumerConfig topicConfig
                     && !topicConfig.isDurable();
             boolean autoAck = subscriptionConfig.ackMode() == AcknowledgementMode.AUTO_ACK && !directTopic;
@@ -167,16 +182,26 @@ public class ListenerActions {
             JCSMPSession session = (JCSMPSession) listener.getNativeData(NATIVE_SESSION);
             TransactedSession txSession = (TransactedSession) listener.getNativeData(NATIVE_TX_SESSION);
 
-            // Create the Caller supplied to onMessage for explicit ack/nack and transaction control.
+            String url = (String) listener.getNativeData(NATIVE_URL);
+            String vpn = (String) listener.getNativeData(NATIVE_VPN);
+            String destinationName = ConsumerUtils.extractDestinationName(subscriptionConfig);
+            String destinationKind = subscriptionConfig instanceof TopicConsumerConfig
+                    ? DESTINATION_KIND_TOPIC : DESTINATION_KIND_QUEUE;
+
+            // Create the Caller supplied to onMessage for explicit ack/nack and transaction control. It carries the
+            // same observability identity as the listener so settlements it performs are tagged like the rest of the
+            // consume path.
             BObject caller = ValueCreator.createObjectValue(ModuleUtils.getModule(), "Caller");
             caller.addNativeData(NATIVE_TX_SESSION, txSession);
             caller.addNativeData(NATIVE_CLOSED, false);
+            caller.addNativeData(NATIVE_URL, url);
+            caller.addNativeData(NATIVE_VPN, vpn);
+            caller.addNativeData(NATIVE_DESTINATION, destinationName);
+            caller.addNativeData(NATIVE_DESTINATION_KIND, destinationKind);
 
-            String url = (String) listener.getNativeData(NATIVE_URL);
-            String destinationName = ConsumerUtils.extractDestinationName(subscriptionConfig);
             SolaceMessageListener messageListener =
-                    new SolaceMessageListener(runtime, service, caller, hasCaller, hasOnError, autoAck, url,
-                            destinationName);
+                    new SolaceMessageListener(runtime, service, caller, hasCaller, hasOnError, autoAck, url, vpn,
+                            destinationName, destinationKind);
 
             AttachedService attached = createReceiver(session, txSession, isTransacted, subscriptionConfig,
                     messageListener);
@@ -276,6 +301,7 @@ public class ListenerActions {
 
             listener.addNativeData(NATIVE_STARTED, false);
             listener.addNativeData(NATIVE_CLOSED, true);
+            SolaceSessionEventHandler.markDisconnected(listener);
             return null;
         } catch (Exception e) {
             return CommonUtils.createError("Failed to stop listener", e);
