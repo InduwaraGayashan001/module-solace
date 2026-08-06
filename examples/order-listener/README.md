@@ -106,6 +106,6 @@ and add the following to this example's `Ballerina.toml`:
 [[dependency]]
 org = "xlibb"
 name = "solace"
-version = "0.4.3"
+version = "0.5.0"
 repository = "local"
 ```
