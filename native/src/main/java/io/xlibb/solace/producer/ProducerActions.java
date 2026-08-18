@@ -197,18 +197,12 @@ public class ProducerActions {
         }
     }
 
-    /**
-     * Counts a publish that failed before reaching the broker and returns the error.
-     */
     private static BError reportPublishFailure(BObject producer, String destinationName, String destinationKind,
                                          String errorMessage) {
         SolaceMetricsUtil.reportProducerError(producer, destinationName, destinationKind, ERROR_TYPE_PUBLISH);
         return CommonUtils.createError(errorMessage);
     }
 
-    /**
-     * Puts the publishing span's trace context on the outbound message.
-     */
     private static void injectTraceContext(Environment env, XMLMessage jcsmpMessage) {
         try {
             SolaceTracingUtil.applyTraceContext(env, jcsmpMessage);
@@ -348,12 +342,6 @@ public class ProducerActions {
         }
     }
 
-    /**
-     * Factory method to create Destination sealed interface from BMap.
-     * 
-     * @param destinationMap the Ballerina destination map
-     * @return Topic or Queue destination
-     */
     private static Destination createDestinationFromMap(BMap<BString, Object> destinationMap) {
         if (destinationMap.containsKey(QUEUE_NAME_KEY)) {
             return new Queue(destinationMap);
@@ -363,9 +351,6 @@ public class ProducerActions {
         throw new IllegalArgumentException("Destination must have 'queueName' or 'topicName' field");
     }
 
-    /**
-     * Counts a producer-level failure and returns the error.
-     */
     private static BError reportProducerFailure(BObject producer, String errorType, String errorMessage) {
         SolaceMetricsUtil.reportProducerError(producer, errorType);
         return CommonUtils.createError(errorMessage);
@@ -386,9 +371,6 @@ public class ProducerActions {
         return UNKNOWN;
     }
 
-    /**
-     * A blank destination name (which the broker rejects) must not become an empty tag value.
-     */
     private static String nameOrUnknown(BString name) {
         String value = name.getValue();
         return value.isBlank() ? UNKNOWN : value;
@@ -407,9 +389,6 @@ public class ProducerActions {
         return UNKNOWN;
     }
 
-    /**
-     * Reads the message's delivery mode for tagging. 
-     */
     private static String getDeliveryMode(BMap<BString, Object> message) {
         if (message == null) {
             return UNKNOWN;

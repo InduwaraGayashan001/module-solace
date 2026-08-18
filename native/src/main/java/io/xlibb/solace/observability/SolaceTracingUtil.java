@@ -155,9 +155,6 @@ public class SolaceTracingUtil {
         xmlMessage.setProperties(properties);
     }
 
-    /**
-     * Sets the message's native trace-context from a W3C {@code traceparent}, the form the propagator produces. 
-     */
     private static void setNativeTraceContext(XMLMessage xmlMessage, String traceParent, String traceState) {
         if (traceParent == null || !(xmlMessage instanceof MessageTracingSupport tracing)) {
             return;
@@ -183,7 +180,6 @@ public class SolaceTracingUtil {
         }
     }
 
-    /** Returns an empty array when the input is not valid hex, which callers treat as "unusable". */
     private static byte[] fromHex(String hex) {
         byte[] out = new byte[hex.length() / 2];
         for (int i = 0; i < out.length; i++) {

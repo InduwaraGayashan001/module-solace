@@ -128,13 +128,6 @@ public class PropertyConverter {
         return sdtMap;
     }
 
-    /**
-     * Converts an SDT value to a Ballerina-compatible value.
-     *
-     * @param value the SDT value
-     * @return Ballerina-compatible value, or null if conversion not supported
-     * @throws SDTException if nested SDTMap conversion fails
-     */
     private static Object convertSDTValueToBallerina(Object value) throws SDTException {
         return switch (value) {
             case null -> null;
@@ -153,14 +146,6 @@ public class PropertyConverter {
 
     }
 
-    /**
-     * Converts a Ballerina value to an SDT value and puts it in the SDTMap.
-     *
-     * @param sdtMap the target SDTMap
-     * @param key    the key
-     * @param value  the Ballerina value
-     * @throws SDTException if SDT conversion fails
-     */
     private static void convertBallerinaValueToSDT(SDTMap sdtMap, String key, Object value)
             throws SDTException {
         switch (value) {

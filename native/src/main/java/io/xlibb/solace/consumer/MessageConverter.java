@@ -227,9 +227,6 @@ public class MessageConverter {
         return new byte[0];
     }
 
-    /**
-     * Gets the Message record type from the Ballerina module.
-     */
     private static RecordType getMessageRecordType() {
         return (RecordType) ValueCreator.createRecordValue(
                 ModuleUtils.getModule(),

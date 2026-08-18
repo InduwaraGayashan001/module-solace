@@ -83,9 +83,6 @@ public final class ConfigurationUtils {
         return props;
     }
 
-    /**
-     * Sets channel properties like timeouts, retries, and compression.
-     */
     private static void setChannelProperties(JCSMPProperties props, ConnectionConfiguration config) {
         JCSMPChannelProperties channelProps = (JCSMPChannelProperties) props.getProperty(
                 JCSMPProperties.CLIENT_CHANNEL_PROPERTIES);
@@ -113,9 +110,6 @@ public final class ConfigurationUtils {
         }
     }
 
-    /**
-     * Sets authentication based on the AuthConfig type using sealed interface pattern.
-     */
     private static void setAuthentication(JCSMPProperties props, AuthConfig auth) throws Exception {
         if (auth == null) {
             // Default to basic authentication with empty credentials
@@ -149,9 +143,6 @@ public final class ConfigurationUtils {
         }
     }
 
-    /**
-     * Sets SSL/TLS configuration.
-     */
     private static void setSecureSocket(JCSMPProperties props, SecureSocketConfig secureSocket) throws Exception {
         // Set trust store for server certificate validation
         if (secureSocket.trustStore() != null) {

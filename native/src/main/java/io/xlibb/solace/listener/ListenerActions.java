@@ -362,9 +362,6 @@ public class ListenerActions {
         return false;
     }
 
-    /**
-     * Reads the {@code @solace:ServiceConfig} annotation value from the service type, or null if absent.
-     */
     @SuppressWarnings("unchecked")
     private static BMap<BString, Object> getServiceConfig(BObject service) {
         Type serviceType = TypeUtils.getImpliedType(TypeUtils.getType(service));
@@ -381,9 +378,6 @@ public class ListenerActions {
         return null;
     }
 
-    /**
-     * Returns the parameter count of the remote {@code onMessage} method, or -1 if the service has no such method.
-     */
     private static int onMessageParameterCount(BObject service) {
         for (MethodType method : remoteMethods(service)) {
             if (ON_MESSAGE.equals(method.getName())) {

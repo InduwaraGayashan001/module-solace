@@ -76,13 +76,6 @@ public class MessageConverter {
         return jcsmpMessage;
     }
 
-    /**
-     * Sets all message fields on a JCSMP XMLMessage from a Ballerina Message record.
-     *
-     * @param jcsmpMessage the JCSMP message to configure
-     * @param message      the Ballerina Message record containing field values
-     * @throws SDTException if SDTMap conversion fails
-     */
     private static void setMessageFields(XMLMessage jcsmpMessage, BMap<BString, Object> message) throws SDTException {
         // Delivery mode
         String deliveryMode = message.getStringValue(DELIVERY_MODE_KEY).getValue();

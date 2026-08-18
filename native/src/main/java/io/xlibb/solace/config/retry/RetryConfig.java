@@ -53,9 +53,6 @@ public record RetryConfig(int connectRetries, int connectRetriesPerHost, int rec
         );
     }
 
-    /**
-     * Converts decimal seconds to milliseconds.
-     */
     private static long decimalToMillis(BigDecimal seconds) {
         return seconds.multiply(BigDecimal.valueOf(1000)).longValue();
     }
