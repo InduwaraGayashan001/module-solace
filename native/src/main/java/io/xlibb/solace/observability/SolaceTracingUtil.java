@@ -235,8 +235,8 @@ public class SolaceTracingUtil {
         if (id == null || id.length != expectedLength) {
             return false;
         }
-        for (byte b : id) {
-            if (b != 0) {
+        for (byte octet : id) {
+            if (octet != 0) {
                 return true;
             }
         }
@@ -250,8 +250,8 @@ public class SolaceTracingUtil {
 
     private static String toHex(byte[] bytes) {
         StringBuilder hex = new StringBuilder(bytes.length * 2);
-        for (byte b : bytes) {
-            hex.append(HEX_DIGITS[(b >> 4) & 0xF]).append(HEX_DIGITS[b & 0xF]);
+        for (byte octet : bytes) {
+            hex.append(HEX_DIGITS[(octet >> 4) & 0xF]).append(HEX_DIGITS[octet & 0xF]);
         }
         return hex.toString();
     }
