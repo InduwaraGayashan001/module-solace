@@ -55,6 +55,7 @@ public class SolaceTracingUtil {
     private static final String W3C_VERSION = "00";
     private static final String SAMPLED_FLAGS = "01";
     private static final String NOT_SAMPLED_FLAGS = "00";
+    private static final String TRACEPARENT_DELIMITER = "-";
     private static final int TRACE_ID_LENGTH = 16;
     private static final int SPAN_ID_LENGTH = 8;
     private static final char[] HEX_DIGITS = "0123456789abcdef".toCharArray();
@@ -160,7 +161,7 @@ public class SolaceTracingUtil {
             return;
         }
         // <version>-<32 hex trace id>-<16 hex span id>-<2 hex flags>
-        String[] parts = traceParent.split("-");
+        String[] parts = traceParent.split(TRACEPARENT_DELIMITER);
         if (parts.length < 4 || parts[1].length() != TRACE_ID_LENGTH * 2
                 || parts[2].length() != SPAN_ID_LENGTH * 2 || parts[3].length() < 2) {
             return;
@@ -244,8 +245,11 @@ public class SolaceTracingUtil {
     }
 
     private static String toTraceParent(TraceContext context) {
-        return W3C_VERSION + "-" + toHex(context.getTraceIdBytes16()) + "-" + toHex(context.getSpanIdBytes8())
-                + "-" + (context.isSampled() ? SAMPLED_FLAGS : NOT_SAMPLED_FLAGS);
+        return String.join(TRACEPARENT_DELIMITER,
+                W3C_VERSION,
+                toHex(context.getTraceIdBytes16()),
+                toHex(context.getSpanIdBytes8()),
+                context.isSampled() ? SAMPLED_FLAGS : NOT_SAMPLED_FLAGS);
     }
 
     private static String toHex(byte[] bytes) {
