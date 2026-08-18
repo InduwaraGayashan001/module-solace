@@ -36,6 +36,7 @@ import io.ballerina.runtime.api.values.BString;
 import io.xlibb.solace.ModuleUtils;
 import io.xlibb.solace.common.DestinationConverter;
 import io.xlibb.solace.common.PropertyConverter;
+import io.xlibb.solace.observability.SolaceTracingUtil;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
@@ -165,14 +166,14 @@ public class MessageConverter {
         } catch (UnsupportedOperationException ignored) {
         }
 
-        // Set properties if present
+        // Set properties if present.
         SDTMap sdtProperties = xmlMessage.getProperties();
-        if (sdtProperties != null) {
-            BMap<BString, Object> properties = PropertyConverter.sdtMapToBallerina(sdtProperties,
-                    BALLERINA_MSG_PROPERTY_TYPE);
-            if (!properties.isEmpty()) {
-                message.put(PROPERTIES_KEY, properties);
-            }
+        BMap<BString, Object> properties = sdtProperties != null
+                ? PropertyConverter.sdtMapToBallerina(sdtProperties, BALLERINA_MSG_PROPERTY_TYPE)
+                : ValueCreator.createMapValue(BALLERINA_MSG_PROPERTY_TYPE);
+        SolaceTracingUtil.surfaceNativeTraceContext(xmlMessage, properties);
+        if (!properties.isEmpty()) {
+            message.put(PROPERTIES_KEY, properties);
         }
 
         // Set user data if present

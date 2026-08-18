@@ -22,7 +22,6 @@ import com.solacesystems.jcsmp.JCSMPFactory;
 import com.solacesystems.jcsmp.JCSMPProperties;
 import com.solacesystems.jcsmp.JCSMPSession;
 import com.solacesystems.jcsmp.ProducerFlowProperties;
-import com.solacesystems.jcsmp.SDTMap;
 import com.solacesystems.jcsmp.XMLMessage;
 import com.solacesystems.jcsmp.XMLMessageProducer;
 import com.solacesystems.jcsmp.transaction.TransactedSession;
@@ -41,7 +40,8 @@ import io.xlibb.solace.observability.SolaceMetricsUtil;
 import io.xlibb.solace.observability.SolaceSessionEventHandler;
 import io.xlibb.solace.observability.SolaceTracingUtil;
 
-import java.util.Map;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import static io.xlibb.solace.common.Constants.NATIVE_CLOSED;
 import static io.xlibb.solace.common.Constants.NATIVE_EVENT_HANDLER;
@@ -66,6 +66,8 @@ import static io.xlibb.solace.observability.SolaceObservabilityConstants.UNKNOWN
  * Producer actions - main entry point for Ballerina MessageProducer interop.
  */
 public class ProducerActions {
+
+    private static final Logger LOGGER = Logger.getLogger(ProducerActions.class.getName());
 
     private static final BString QUEUE_NAME_KEY = StringUtils.fromString("queueName");
     private static final BString TOPIC_NAME_KEY = StringUtils.fromString("topicName");
@@ -131,9 +133,6 @@ public class ProducerActions {
             SolaceMetricsUtil.reportConnectionError(CONTEXT_PRODUCER, url.getValue(), vpnName);
             return CommonUtils.createError("Failed to initialize producer", e);
         }
-
-        // Observability only, deliberately outside the block above: the producer is fully created by this point, so a
-        // failure here must not report an init failure for an init that succeeded.
         SolaceMetricsUtil.reportNewProducer(producer);
         return null;
     }
@@ -208,21 +207,15 @@ public class ProducerActions {
     }
 
     /**
-     * Injects the current span's trace context into the outbound message's properties.
+     * Puts the publishing span's trace context on the outbound message.
      */
-    private static void injectTraceContext(Environment env, XMLMessage jcsmpMessage) throws Exception {
-        Map<String, String> traceHeaders = SolaceTracingUtil.getTraceContextHeaders(env);
-        if (traceHeaders == null || traceHeaders.isEmpty()) {
-            return;
+    private static void injectTraceContext(Environment env, XMLMessage jcsmpMessage) {
+        try {
+            SolaceTracingUtil.applyTraceContext(env, jcsmpMessage);
+        } catch (Throwable t) {
+            LOGGER.log(Level.WARNING,
+                    "Failed to attach the trace context to the outbound message; publishing it untraced", t);
         }
-        SDTMap properties = jcsmpMessage.getProperties();
-        if (properties == null) {
-            properties = JCSMPFactory.onlyInstance().createMap();
-        }
-        for (Map.Entry<String, String> entry : traceHeaders.entrySet()) {
-            properties.putString(entry.getKey(), entry.getValue());
-        }
-        jcsmpMessage.setProperties(properties);
     }
 
     /**
