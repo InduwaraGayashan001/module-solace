@@ -36,6 +36,7 @@ import io.ballerina.runtime.observability.tracer.TracersStore;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HexFormat;
 import java.util.Map;
 
 import static io.xlibb.solace.common.MessageFieldConstants.PROPERTIES_KEY;
@@ -58,7 +59,7 @@ public class SolaceTracingUtil {
     private static final String TRACEPARENT_DELIMITER = "-";
     private static final int TRACE_ID_LENGTH = 16;
     private static final int SPAN_ID_LENGTH = 8;
-    private static final char[] HEX_DIGITS = "0123456789abcdef".toCharArray();
+    private static final HexFormat HEX_FORMAT = HexFormat.of();
 
     public static void traceResourceInvocation(Environment env, BObject object, String destination) {
         if (!ObserveUtils.isTracingEnabled()) {
@@ -166,10 +167,14 @@ public class SolaceTracingUtil {
                 || parts[2].length() != SPAN_ID_LENGTH * 2 || parts[3].length() < 2) {
             return;
         }
-        byte[] traceId = fromHex(parts[1]);
-        byte[] spanId = fromHex(parts[2]);
-        byte[] flags = fromHex(parts[3].substring(0, 2));
-        if (traceId.length == 0 || spanId.length == 0 || flags.length == 0) {
+        byte[] traceId;
+        byte[] spanId;
+        byte[] flags;
+        try {
+            traceId = HEX_FORMAT.parseHex(parts[1]);
+            spanId = HEX_FORMAT.parseHex(parts[2]);
+            flags = HEX_FORMAT.parseHex(parts[3].substring(0, 2));
+        } catch (IllegalArgumentException e) {
             return;
         }
         TraceContextSetter setter = tracing.contextSetter();
@@ -179,19 +184,6 @@ public class SolaceTracingUtil {
         if (traceState != null && !traceState.isEmpty()) {
             setter.setTraceState(traceState);
         }
-    }
-
-    private static byte[] fromHex(String hex) {
-        byte[] out = new byte[hex.length() / 2];
-        for (int i = 0; i < out.length; i++) {
-            int high = Character.digit(hex.charAt(i * 2), 16);
-            int low = Character.digit(hex.charAt(i * 2 + 1), 16);
-            if (high < 0 || low < 0) {
-                return new byte[0];
-            }
-            out[i] = (byte) ((high << 4) | low);
-        }
-        return out;
     }
 
     /**
@@ -247,17 +239,9 @@ public class SolaceTracingUtil {
     private static String toTraceParent(TraceContext context) {
         return String.join(TRACEPARENT_DELIMITER,
                 W3C_VERSION,
-                toHex(context.getTraceIdBytes16()),
-                toHex(context.getSpanIdBytes8()),
+                HEX_FORMAT.formatHex(context.getTraceIdBytes16()),
+                HEX_FORMAT.formatHex(context.getSpanIdBytes8()),
                 context.isSampled() ? SAMPLED_FLAGS : NOT_SAMPLED_FLAGS);
-    }
-
-    private static String toHex(byte[] bytes) {
-        StringBuilder hex = new StringBuilder(bytes.length * 2);
-        for (byte octet : bytes) {
-            hex.append(HEX_DIGITS[(octet >> 4) & 0xF]).append(HEX_DIGITS[octet & 0xF]);
-        }
-        return hex.toString();
     }
 
     private static Collection<String> propagationFields() {
