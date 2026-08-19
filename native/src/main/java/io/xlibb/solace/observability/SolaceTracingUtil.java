@@ -18,6 +18,12 @@
 
 package io.xlibb.solace.observability;
 
+import com.solace.messaging.trace.propagation.MessageTracingSupport;
+import com.solace.messaging.trace.propagation.TraceContext;
+import com.solace.messaging.trace.propagation.TraceContextSetter;
+import com.solacesystems.jcsmp.JCSMPFactory;
+import com.solacesystems.jcsmp.SDTMap;
+import com.solacesystems.jcsmp.XMLMessage;
 import io.ballerina.runtime.api.Environment;
 import io.ballerina.runtime.api.utils.StringUtils;
 import io.ballerina.runtime.api.values.BMap;
@@ -30,6 +36,7 @@ import io.ballerina.runtime.observability.tracer.TracersStore;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HexFormat;
 import java.util.Map;
 
 import static io.xlibb.solace.common.MessageFieldConstants.PROPERTIES_KEY;
@@ -42,6 +49,17 @@ import static io.xlibb.solace.observability.SolaceObservabilityConstants.TAG_KEY
  * Tracing utility for the Solace connector.
  */
 public class SolaceTracingUtil {
+
+    // W3C trace-context field names, matching what the OpenTelemetry propagator declares.
+    private static final String TRACEPARENT = "traceparent";
+    private static final String TRACESTATE = "tracestate";
+    private static final String W3C_VERSION = "00";
+    private static final String SAMPLED_FLAGS = "01";
+    private static final String NOT_SAMPLED_FLAGS = "00";
+    private static final String TRACEPARENT_DELIMITER = "-";
+    private static final int TRACE_ID_LENGTH = 16;
+    private static final int SPAN_ID_LENGTH = 8;
+    private static final HexFormat HEX_FORMAT = HexFormat.of();
 
     public static void traceResourceInvocation(Environment env, BObject object, String destination) {
         if (!ObserveUtils.isTracingEnabled()) {
@@ -107,6 +125,123 @@ public class SolaceTracingUtil {
             putIfPresent(carrier, props, field);
         }
         return carrier;
+    }
+
+    /**
+     * Writes the publishing span's trace-context onto an outbound message.
+     * 
+     * @param env        the Ballerina environment of the publishing native call
+     * @param xmlMessage the outbound JCSMP message
+     * @throws Exception if the message's property map cannot be written
+     */
+    public static void applyTraceContext(Environment env, XMLMessage xmlMessage) throws Exception {
+        Map<String, String> carrier = getTraceContextHeaders(env);
+        if (carrier == null || carrier.isEmpty() || xmlMessage == null) {
+            return;
+        }
+        String traceParent = carrier.get(TRACEPARENT);
+        String traceState = carrier.get(TRACESTATE);
+
+        setNativeTraceContext(xmlMessage, traceParent, traceState);
+
+        SDTMap properties = xmlMessage.getProperties();
+        if (properties == null) {
+            properties = JCSMPFactory.onlyInstance().createMap();
+        }
+        if (traceParent != null && !properties.containsKey(TRACEPARENT)) {
+            properties.putString(TRACEPARENT, traceParent);
+        }
+        if (traceState != null && !traceState.isEmpty() && !properties.containsKey(TRACESTATE)) {
+            properties.putString(TRACESTATE, traceState);
+        }
+        xmlMessage.setProperties(properties);
+    }
+
+    private static void setNativeTraceContext(XMLMessage xmlMessage, String traceParent, String traceState) {
+        if (traceParent == null || !(xmlMessage instanceof MessageTracingSupport tracing)) {
+            return;
+        }
+        // <version>-<32 hex trace id>-<16 hex span id>-<2 hex flags>
+        String[] parts = traceParent.split(TRACEPARENT_DELIMITER);
+        if (parts.length < 4 || parts[1].length() != TRACE_ID_LENGTH * 2
+                || parts[2].length() != SPAN_ID_LENGTH * 2 || parts[3].length() < 2) {
+            return;
+        }
+        byte[] traceId;
+        byte[] spanId;
+        byte[] flags;
+        try {
+            traceId = HEX_FORMAT.parseHex(parts[1]);
+            spanId = HEX_FORMAT.parseHex(parts[2]);
+            flags = HEX_FORMAT.parseHex(parts[3].substring(0, 2));
+        } catch (IllegalArgumentException e) {
+            return;
+        }
+        TraceContextSetter setter = tracing.contextSetter();
+        setter.setTraceIdBytes16(traceId);
+        setter.setSpanIdBytes8(spanId);
+        setter.setSampled((flags[0] & 0x01) != 0);
+        if (traceState != null && !traceState.isEmpty()) {
+            setter.setTraceState(traceState);
+        }
+    }
+
+    /**
+     * Copies the trace-context the broker attached to a message into its user properties.
+     *
+     * @param xmlMessage the received JCSMP message
+     * @param properties the Ballerina property map being built for it, mutated in place
+     */
+    public static void surfaceNativeTraceContext(XMLMessage xmlMessage, BMap<BString, Object> properties) {
+        if (xmlMessage == null || properties == null) {
+            return;
+        }
+        Collection<String> fields = propagationFields();
+        if (fields.isEmpty() || !fields.contains(TRACEPARENT)) {
+            return;
+        }
+        if (!(xmlMessage instanceof MessageTracingSupport tracing)) {
+            return;
+        }
+        TraceContext context = firstUsable(tracing.transportContext(), tracing.creationContext());
+        if (context == null) {
+            return;
+        }
+        properties.put(StringUtils.fromString(TRACEPARENT), StringUtils.fromString(toTraceParent(context)));
+        String traceState = context.getTraceState();
+        if (traceState != null && !traceState.isEmpty() && fields.contains(TRACESTATE)) {
+            properties.put(StringUtils.fromString(TRACESTATE), StringUtils.fromString(traceState));
+        }
+    }
+
+    private static TraceContext firstUsable(TraceContext... contexts) {
+        for (TraceContext context : contexts) {
+            if (context != null && isSet(context.getTraceIdBytes16(), TRACE_ID_LENGTH)
+                    && isSet(context.getSpanIdBytes8(), SPAN_ID_LENGTH)) {
+                return context;
+            }
+        }
+        return null;
+    }
+
+    private static boolean isSet(byte[] id, int expectedLength) {
+        if (id == null || id.length != expectedLength) {
+            return false;
+        }
+        for (byte octet : id) {
+            if (octet != 0) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static String toTraceParent(TraceContext context) {
+        return String.join(TRACEPARENT_DELIMITER,
+                W3C_VERSION,
+                HEX_FORMAT.formatHex(context.getTraceIdBytes16()),
+                HEX_FORMAT.formatHex(context.getSpanIdBytes8()),
+                context.isSampled() ? SAMPLED_FLAGS : NOT_SAMPLED_FLAGS);
     }
 
     private static Collection<String> propagationFields() {

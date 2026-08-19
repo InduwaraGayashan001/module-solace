@@ -103,14 +103,6 @@ public class ConsumerUtils {
         flowProps.setReconnectRetryIntervalInMsecs(config.reconnectRetryIntervalInMsecs());
     }
 
-    /**
-     * Creates a queue for consumption (temporary or regular).
-     *
-     * @param session the JCSMP session
-     * @param config  the queue consumer configuration
-     * @return the created Queue
-     * @throws JCSMPException if queue creation fails
-     */
     private static Queue createQueue(JCSMPSession session, QueueConsumerConfig config) throws JCSMPException {
         if (config.temporary()) {
             return (config.queueName() != null && !config.queueName().isEmpty())

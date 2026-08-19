@@ -274,9 +274,6 @@ public class ConsumerActions {
         }
     }
 
-    /**
-     * Records the outcome of a successful receive call.
-     */
     @SuppressWarnings("unchecked")
     private static void reportReceiveOutcome(BObject consumer, Object result) {
         if (result == null) {

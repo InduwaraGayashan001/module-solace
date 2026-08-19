@@ -109,9 +109,6 @@ public record ConnectionConfiguration(
         );
     }
 
-    /**
-     * Extracts optional string value from map.
-     */
     private static String getOptionalString(BMap<BString, Object> map, BString key) {
         if (map.containsKey(key)) {
             Object value = map.get(key);
@@ -122,9 +119,6 @@ public record ConnectionConfiguration(
         return null;
     }
 
-    /**
-     * Extracts and converts authentication configuration from map.
-     */
     @SuppressWarnings("unchecked")
     private static AuthConfig getAuthConfig(BMap<BString, Object> config) {
         if (!config.containsKey(AUTH_KEY)) {
@@ -138,9 +132,6 @@ public record ConnectionConfiguration(
         return createAuthConfig(authMap);
     }
 
-    /**
-     * Factory method to create appropriate AuthConfig based on fields present.
-     */
     private static AuthConfig createAuthConfig(BMap<BString, Object> authMap) {
         BString usernameKey = StringUtils.fromString("username");
         BString accessTokenKey = StringUtils.fromString("accessToken");
@@ -157,9 +148,6 @@ public record ConnectionConfiguration(
         return null;
     }
 
-    /**
-     * Extracts retry configuration from map.
-     */
     @SuppressWarnings("unchecked")
     private static RetryConfig getRetryConfig(BMap<BString, Object> config) {
         if (config.containsKey(RETRY_CONFIG_KEY)) {
@@ -172,9 +160,6 @@ public record ConnectionConfiguration(
         return null;
     }
 
-    /**
-     * Extracts secure socket configuration from map.
-     */
     @SuppressWarnings("unchecked")
     private static SecureSocketConfig getSecureSocketConfig(BMap<BString, Object> config) {
         if (config.containsKey(SECURE_SOCKET_KEY)) {
@@ -187,9 +172,6 @@ public record ConnectionConfiguration(
         return null;
     }
 
-    /**
-     * Converts decimal seconds to milliseconds.
-     */
     private static long decimalToMillis(BigDecimal seconds) {
         return seconds.multiply(BigDecimal.valueOf(1000)).longValue();
     }

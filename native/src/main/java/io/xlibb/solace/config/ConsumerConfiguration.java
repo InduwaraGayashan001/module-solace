@@ -48,12 +48,6 @@ public record ConsumerConfiguration(
         );
     }
 
-    /**
-     * Factory method to create the appropriate ConsumerSubscriptionConfig type based on the configuration map.
-     *
-     * @param subscriptionConfigMap the subscription configuration map
-     * @return a ConsumerSubscriptionConfig (QueueConsumerConfig or TopicConsumerConfig)
-     */
     private static ConsumerSubscriptionConfig getSubscriptionConfig(BMap<BString, Object> subscriptionConfigMap) {
         if (subscriptionConfigMap == null) {
             throw new IllegalArgumentException("Subscription configuration is required");

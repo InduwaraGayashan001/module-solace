@@ -136,9 +136,6 @@ final class SolaceMessageListener implements XMLMessageListener {
         }
     }
 
-    /**
-     * Settles a successfully processed message in AUTO_ACK mode.
-     */
     private void settleAutoAck(BytesXMLMessage message, Map<String, String> traceContext) {
         try {
             message.ackMessage();

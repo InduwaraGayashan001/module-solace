@@ -22,7 +22,6 @@ import com.solacesystems.jcsmp.JCSMPFactory;
 import com.solacesystems.jcsmp.JCSMPProperties;
 import com.solacesystems.jcsmp.JCSMPSession;
 import com.solacesystems.jcsmp.ProducerFlowProperties;
-import com.solacesystems.jcsmp.SDTMap;
 import com.solacesystems.jcsmp.XMLMessage;
 import com.solacesystems.jcsmp.XMLMessageProducer;
 import com.solacesystems.jcsmp.transaction.TransactedSession;
@@ -41,7 +40,8 @@ import io.xlibb.solace.observability.SolaceMetricsUtil;
 import io.xlibb.solace.observability.SolaceSessionEventHandler;
 import io.xlibb.solace.observability.SolaceTracingUtil;
 
-import java.util.Map;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import static io.xlibb.solace.common.Constants.NATIVE_CLOSED;
 import static io.xlibb.solace.common.Constants.NATIVE_EVENT_HANDLER;
@@ -66,6 +66,8 @@ import static io.xlibb.solace.observability.SolaceObservabilityConstants.UNKNOWN
  * Producer actions - main entry point for Ballerina MessageProducer interop.
  */
 public class ProducerActions {
+
+    private static final Logger LOGGER = Logger.getLogger(ProducerActions.class.getName());
 
     private static final BString QUEUE_NAME_KEY = StringUtils.fromString("queueName");
     private static final BString TOPIC_NAME_KEY = StringUtils.fromString("topicName");
@@ -131,9 +133,6 @@ public class ProducerActions {
             SolaceMetricsUtil.reportConnectionError(CONTEXT_PRODUCER, url.getValue(), vpnName);
             return CommonUtils.createError("Failed to initialize producer", e);
         }
-
-        // Observability only, deliberately outside the block above: the producer is fully created by this point, so a
-        // failure here must not report an init failure for an init that succeeded.
         SolaceMetricsUtil.reportNewProducer(producer);
         return null;
     }
@@ -198,31 +197,19 @@ public class ProducerActions {
         }
     }
 
-    /**
-     * Counts a publish that failed before reaching the broker and returns the error.
-     */
     private static BError reportPublishFailure(BObject producer, String destinationName, String destinationKind,
                                          String errorMessage) {
         SolaceMetricsUtil.reportProducerError(producer, destinationName, destinationKind, ERROR_TYPE_PUBLISH);
         return CommonUtils.createError(errorMessage);
     }
 
-    /**
-     * Injects the current span's trace context into the outbound message's properties.
-     */
-    private static void injectTraceContext(Environment env, XMLMessage jcsmpMessage) throws Exception {
-        Map<String, String> traceHeaders = SolaceTracingUtil.getTraceContextHeaders(env);
-        if (traceHeaders == null || traceHeaders.isEmpty()) {
-            return;
+    private static void injectTraceContext(Environment env, XMLMessage jcsmpMessage) {
+        try {
+            SolaceTracingUtil.applyTraceContext(env, jcsmpMessage);
+        } catch (Throwable t) {
+            LOGGER.log(Level.WARNING,
+                    "Failed to attach the trace context to the outbound message; publishing it untraced", t);
         }
-        SDTMap properties = jcsmpMessage.getProperties();
-        if (properties == null) {
-            properties = JCSMPFactory.onlyInstance().createMap();
-        }
-        for (Map.Entry<String, String> entry : traceHeaders.entrySet()) {
-            properties.putString(entry.getKey(), entry.getValue());
-        }
-        jcsmpMessage.setProperties(properties);
     }
 
     /**
@@ -355,12 +342,6 @@ public class ProducerActions {
         }
     }
 
-    /**
-     * Factory method to create Destination sealed interface from BMap.
-     * 
-     * @param destinationMap the Ballerina destination map
-     * @return Topic or Queue destination
-     */
     private static Destination createDestinationFromMap(BMap<BString, Object> destinationMap) {
         if (destinationMap.containsKey(QUEUE_NAME_KEY)) {
             return new Queue(destinationMap);
@@ -370,9 +351,6 @@ public class ProducerActions {
         throw new IllegalArgumentException("Destination must have 'queueName' or 'topicName' field");
     }
 
-    /**
-     * Counts a producer-level failure and returns the error.
-     */
     private static BError reportProducerFailure(BObject producer, String errorType, String errorMessage) {
         SolaceMetricsUtil.reportProducerError(producer, errorType);
         return CommonUtils.createError(errorMessage);
@@ -393,9 +371,6 @@ public class ProducerActions {
         return UNKNOWN;
     }
 
-    /**
-     * A blank destination name (which the broker rejects) must not become an empty tag value.
-     */
     private static String nameOrUnknown(BString name) {
         String value = name.getValue();
         return value.isBlank() ? UNKNOWN : value;
@@ -414,9 +389,6 @@ public class ProducerActions {
         return UNKNOWN;
     }
 
-    /**
-     * Reads the message's delivery mode for tagging. 
-     */
     private static String getDeliveryMode(BMap<BString, Object> message) {
         if (message == null) {
             return UNKNOWN;
